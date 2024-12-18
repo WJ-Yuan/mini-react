@@ -10,4 +10,4 @@ const element = MiniReact.createElement(
 );
 
 const container = document.querySelector("#app");
-container.appendChild(element);
+MiniReact.render(element, container);
