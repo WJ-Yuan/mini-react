@@ -1,6 +1,7 @@
 import { TEXT_ELEMENT } from "./constant";
 
-let nextUnitOfWork = null;
+let nextUnitOfWork = null; // 下一个工作单元
+let wipRoot = null; // 正在工作的根节点
 requestIdleCallback(workLoop);
 
 function workLoop(deadline) {
@@ -11,7 +12,30 @@ function workLoop(deadline) {
 		shouldYield = deadline.timeRemaining() < 1;
 	}
 
+	// 如果我们在 performUnitOfWork 中每次都 appendChild 添加新节点
+	// 在我们完成渲染整个树之前，浏览器可能会中断我们的操作，导致渲染不完整，用户看不到一个完整的页面
+	// 因此，我们在完成了所有的工作单元后，再提交整个根节点到 DOM
+	if (!nextUnitOfWork && wipRoot) {
+		commitRoot();
+	}
+
 	requestIdleCallback(workLoop);
+}
+
+// 添加所有节点到DOM
+function commitRoot() {
+	commitWork(wipRoot.child);
+	wipRoot = null;
+}
+
+// 递归地将所有节点添加到 DOM
+function commitWork(fiber) {
+	if (!fiber) return;
+
+	const domParent = fiber.parent.dom;
+	domParent.appendChild(fiber.dom);
+	commitWork(fiber.child);
+	commitWork(fiber.sibling);
 }
 
 // Fiber
@@ -23,10 +47,6 @@ function performUnitOfWork(fiber) {
 	// add dom node
 	if (!fiber.dom) {
 		fiber.dom = createDom(fiber);
-	}
-
-	if (fiber.parent) {
-		fiber.parent.dom.appendChild(fiber.dom);
 	}
 
 	//  create new fibers
@@ -87,11 +107,13 @@ function createDom(fiber) {
 }
 
 export function render(element, container) {
-	nextUnitOfWork = {
+	wipRoot = {
 		dom: container,
 		type: element.type,
 		props: {
 			children: [element],
 		},
 	};
+
+	nextUnitOfWork = wipRoot;
 }
