@@ -1,7 +1,13 @@
 import * as MiniReact from "./react";
 
-const element = document.createElement("h1");
-element.nodeValue = "Test";
+const element = MiniReact.createElement(
+	"h1",
+	{
+		id: "foo",
+	},
+	MiniReact.createElement("a", null, "bar"),
+	MiniReact.createElement("b"),
+);
 
 const container = document.querySelector("#app");
 container.appendChild(element);
