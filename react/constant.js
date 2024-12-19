@@ -1,1 +1,7 @@
 export const TEXT_ELEMENT = "TEXT_ELEMENT";
+
+export const EFFECT_TAGS = {
+	PLACEMENT: "PLACEMENT",
+	UPDATE: "UPDATE",
+	DELETION: "DELETION",
+};
