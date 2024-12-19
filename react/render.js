@@ -37,7 +37,12 @@ function commitRoot() {
 function commitWork(fiber) {
 	if (!fiber) return;
 
-	const domParent = fiber.parent.dom;
+	// 获取父级 DOM 节点
+	let domParentFiber = fiber.parent;
+	while (!domParentFiber.dom) {
+		domParentFiber = domParentFiber.parent;
+	}
+	const domParent = domParentFiber.dom;
 
 	if (fiber.effectTag === EFFECT_TAGS.PLACEMENT && fiber.dom) {
 		// 新增节点
@@ -47,7 +52,7 @@ function commitWork(fiber) {
 		updateDom(fiber.dom, fiber.alternate.props, fiber.props);
 	} else if (fiber.effectTag === EFFECT_TAGS.DELETION) {
 		// 删除节点
-		domParent.removeChild(fiber.dom);
+		commitDeletion(fiber, domParent);
 	}
 
 	commitWork(fiber.child);
@@ -95,20 +100,22 @@ function updateDom(dom, prevProps, nextProps) {
 		});
 }
 
-// Fiber
-// 当我们完成一个 Fiber 节点的渲染后，如果它有子节点 child，那么下一个工作单元就是这个 child
-// 如果它没有子节点 child，那么它的兄弟节点 sibling 就是下一个工作单元
-// 如果它既没有子节点 child，也没有兄弟节点 sibling，那么下一个工作单元是它父节点的兄弟节点 sibling
-// 如果父节点也没有兄弟节点 sibling，那么我们就继续向上遍历，直到找到有 sibling 的节点，或者到达根节点
-function performUnitOfWork(fiber) {
-	// add dom node
-	if (!fiber.dom) {
-		fiber.dom = createDom(fiber);
+function commitDeletion(fiber, domParent) {
+	if (fiber.dom) {
+		domParent.removeChild(fiber.dom);
+	} else {
+		commitDeletion(fiber.child, domParent);
 	}
+}
 
-	//  create new fibers
-	const elements = fiber.props.children;
-	reconcileChildren(fiber, elements); // 为当前节点创建子节点的 fiber
+function performUnitOfWork(fiber) {
+	// 判断是否是函数组件
+	const isFunctionComponent = fiber.type instanceof Function;
+	if (isFunctionComponent) {
+		updateFunctionComponent(fiber);
+	} else {
+		updateHostComponent(fiber);
+	}
 
 	// return next unit of work
 	if (fiber.child) {
@@ -124,6 +131,29 @@ function performUnitOfWork(fiber) {
 	}
 }
 
+function updateFunctionComponent(fiber) {
+	// 1. 调用函数组件，获取新的元素
+	const children = [fiber.type(fiber.props)];
+	// 2. 为当前节点创建子节点的 fiber
+	reconcileChildren(fiber, children);
+}
+
+function updateHostComponent(fiber) {
+	// add dom node
+	if (!fiber.dom) {
+		fiber.dom = createDom(fiber);
+	}
+
+	//  create new fibers
+	const elements = fiber.props.children;
+	reconcileChildren(fiber, elements); // 为当前节点创建子节点的 fiber
+}
+
+// Fiber
+// 当我们完成一个 Fiber 节点的渲染后，如果它有子节点 child，那么下一个工作单元就是这个 child
+// 如果它没有子节点 child，那么它的兄弟节点 sibling 就是下一个工作单元
+// 如果它既没有子节点 child，也没有兄弟节点 sibling，那么下一个工作单元是它父节点的兄弟节点 sibling
+// 如果父节点也没有兄弟节点 sibling，那么我们就继续向上遍历，直到找到有 sibling 的节点，或者到达根节点
 function reconcileChildren(wipFiber, elements) {
 	let index = 0;
 	let oldFiber = wipFiber?.alternate?.child;
