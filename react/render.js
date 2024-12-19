@@ -132,10 +132,66 @@ function performUnitOfWork(fiber) {
 }
 
 function updateFunctionComponent(fiber) {
+	wipFiber = fiber;
+	hookIndex = 0;
+	wipFiber.hooks = [];
+
 	// 1. 调用函数组件，获取新的元素
 	const children = [fiber.type(fiber.props)];
 	// 2. 为当前节点创建子节点的 fiber
 	reconcileChildren(fiber, children);
+}
+
+let wipFiber = null; // 正在工作的 fiber
+let hookIndex = null;
+
+export function useState(initial) {
+	const oldHook = wipFiber?.alternate?.hooks?.[hookIndex];
+	const hook = {
+		state: oldHook ? oldHook.state : initial,
+		queue: [],
+	};
+
+	const actions = oldHook ? oldHook.queue : [];
+	actions.forEach((action) => {
+		hook.state = action(hook.state);
+	});
+
+	const setState = (action) => {
+		hook.queue.push(action);
+
+		// state 的更新引起了组件开始的重新渲染
+		wipRoot = {
+			dom: currentRoot.dom,
+			props: currentRoot.props,
+			alternate: currentRoot,
+		};
+		nextUnitOfWork = wipRoot;
+		deletions = [];
+	};
+
+	wipFiber.hooks.push(hook);
+	hookIndex++;
+	return [hook.state, setState];
+}
+
+export function useEffect(callback, deps) {
+	const oldHook = wipFiber?.alternate?.hooks?.[hookIndex];
+	const hasChangedDeps = deps
+		? !oldHook || deps.some((dep, i) => dep !== oldHook.deps[i])
+		: true;
+
+	const hook = {
+		deps,
+		effect: callback,
+	};
+
+	if (hasChangedDeps) {
+		hook.effect();
+	}
+
+	wipFiber.hooks.push(hook);
+	hookIndex++;
 }
 
 function updateHostComponent(fiber) {
